@@ -3,35 +3,21 @@ plugins {                                // keep it minimal
 }
 
 def buildType        = project.hasProperty('debugNative') ? 'Debug' : 'Release'
-def cmakeBuildDir    = layout.buildDirectory.dir("cmake/$buildType").get().asFile
+def cmakeBuildDir    = layout.buildDirectory.dir("cmake").get().asFile
 def os               = org.gradle.internal.os.OperatingSystem.current()
 def libName          = os.getSharedLibraryName('discord_bridge')      // lib…so / …dll
 
-/* ---------- Task: configure ------------------------------------------------ */
 tasks.register('configureNative', Exec) {
-    description = "Run CMake configure (${buildType})"
     workingDir  = cmakeBuildDir
-    commandLine 'cmake', '-S', projectDir, '-B', cmakeBuildDir, "-DCMAKE_BUILD_TYPE=${buildType}", "-DCMAKE_INSTALL_PREFIX=${cmakeBuildDir}/install"
+    commandLine 'cmake', '-S', projectDir, '-B', cmakeBuildDir, "-DCMAKE_BUILD_TYPE=${buildType}"
     inputs.dir projectDir
     outputs.dir cmakeBuildDir
 }
 
-/* ---------- Task: build ---------------------------------------------------- */
 tasks.register('buildNative', Exec) {
-    description = "Build JNI library with CMake"
     dependsOn   'configureNative'
     workingDir  = cmakeBuildDir
-    commandLine 'cmake',
-            '--build', '.', '--config', buildType, '--parallel'
-    // incremental build metadata
+    commandLine 'cmake', '--build', '.', '--config', buildType, '--parallel'
     inputs.dir  cmakeBuildDir
     outputs.file file("${cmakeBuildDir}/${libName}")
-}
-
-/* ---------- Optional: install target -------------------------------------- */
-tasks.register('installNative', Exec) {
-    description = "CMake install step (copies headers/libs into install/)"
-    dependsOn   'buildNative'
-    workingDir  = cmakeBuildDir
-    commandLine 'cmake', '--install', '.', '--config', buildType
 }

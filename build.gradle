@@ -58,7 +58,7 @@ jar {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
 
-	def jniLibraryPath = project(':native').layout.buildDirectory.dir("cmake/Release/Release")
+	def jniLibraryPath = project(':native').layout.buildDirectory.dir("cmake/Release")
 	def destPath = "META-INF\\lib\\discord_bridge"
 
 	from(jniLibraryPath) {

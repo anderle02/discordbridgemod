@@ -12,24 +12,26 @@ set(DISCORD_SDK_LIB_DIR "${DISCORD_SDK_ROOT}/lib/release")
 set(DISCORD_SDK_BIN_DIR "${DISCORD_SDK_ROOT}/bin/release")
 set(DISCORD_SDK_INCLUDE_DIR "${DISCORD_SDK_ROOT}/include")
 
-# Include for Social SDK headers
-target_include_directories(discord_bridge PRIVATE
-    ${DISCORD_SDK_INCLUDE_DIR}
-    ${JAVA_HOME}/include
-    ${JAVA_HOME}/include/${CMAKE_SYSTEM_NAME} # jni_md.h
-)
-
 # Platform-specific Social SDK library paths
 if(WIN32)
+    set(JNI_PLATFORM_DIR "win32")
     set(DISCORD_LIB_PATH "${DISCORD_SDK_LIB_DIR}/discord_partner_sdk.lib")
     set(DISCORD_SHARED_LIB "${DISCORD_SDK_BIN_DIR}/discord_partner_sdk.dll")
 elseif(APPLE)
+    set(JNI_PLATFORM_DIR "darwin")
     set(DISCORD_LIB_PATH "${DISCORD_SDK_LIB_DIR}/libdiscord_partner_sdk.dylib")
     set(DISCORD_SHARED_LIB "${DISCORD_SDK_LIB_DIR}/libdiscord_partner_sdk.dylib")
 else() # Linux
+    set(JNI_PLATFORM_DIR "linux")
     set(DISCORD_LIB_PATH "${DISCORD_SDK_LIB_DIR}/libdiscord_partner_sdk.so")
     set(DISCORD_SHARED_LIB "${DISCORD_SDK_LIB_DIR}/libdiscord_partner_sdk.so")
 endif()
+
+target_include_directories(discord_bridge PRIVATE
+    ${DISCORD_SDK_INCLUDE_DIR}
+    $ENV{JAVA_HOME}/include
+    $ENV{JAVA_HOME}/include/${JNI_PLATFORM_DIR}   # Correct JNI platform folder
+)
 
 # Link the Social SDK library
 target_link_libraries(discord_bridge PRIVATE ${DISCORD_LIB_PATH})

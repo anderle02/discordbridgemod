@@ -6,9 +6,7 @@
 #include <string>
 #include <functional>
 #include <csignal>
-
-// Replace with your Discord Application ID
-const uint64_t APPLICATION_ID = 1387765262815727707;
+#include <jni.h>
 
 // Create a flag to stop the application
 std::atomic<bool> running = true;
@@ -31,4 +29,19 @@ int main() {
   }
 
   return 0;
+}
+
+static std::shared_ptr<discordpp::Client> client;
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_init(
+    JNIEnv* env, jobject obj, jlong applicationId) {
+
+    // Create Discord client (no event loop here)
+    client = std::make_shared<discordpp::Client>();
+
+    // You could call client->run() or similar here if the SDK requires,
+    // but in this minimal example, just create it and return.
+    std::cout << "test";
+
+    return JNI_TRUE;
 }
