@@ -11,4 +11,6 @@ public final class DiscordSDK {
     }
 
     public native boolean init(long applicationId);
+    public native boolean runCallbacks();
+    public native boolean authorize();
 }

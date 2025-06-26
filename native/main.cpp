@@ -9,39 +9,90 @@
 #include <jni.h>
 
 // Create a flag to stop the application
+jlong APPLICATION_ID = 0;
 std::atomic<bool> running = true;
+static std::shared_ptr<discordpp::Client> client;
 
 // Signal handler to stop the application
-void signalHandler(int signum) {
+void signalHandler(int signum)
+{
   running.store(false);
 }
 
-int main() {
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_init(
+    JNIEnv *env, jobject obj, jlong applicationId)
+{
+  APPLICATION_ID = applicationId;
+
   std::signal(SIGINT, signalHandler);
-  std::cout << "🚀 Initializing Discord SDK...\n";
+  std::cout << "🚀 Initializing Discord SDK with AppID " << APPLICATION_ID << "...\n";
 
-  // Create our Discord Client
-  auto client = std::make_shared<discordpp::Client>();
+  // Create Discord client (no event loop here)
+  client = std::make_shared<discordpp::Client>();
 
-  // Keep application running to allow SDK to receive events and callbacks
-  while (running) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
+  client->AddLogCallback([](auto message, auto severity)
+                         { std::cout << "[" << EnumToString(severity) << "] " << message << std::endl; }, discordpp::LoggingSeverity::Info);
 
-  return 0;
+  client->SetStatusChangedCallback([](discordpp::Client::Status status, discordpp::Client::Error error, int32_t errorDetail)
+                                   {
+  std::cout << "🔄 Status changed: " << discordpp::Client::StatusToString(status) << std::endl;
+
+  if (status == discordpp::Client::Status::Ready) {
+    std::cout << "✅ Client is ready! You can now call SDK functions.\n";
+  } else if (error != discordpp::Client::Error::None) {
+    std::cerr << "❌ Connection Error: " << discordpp::Client::ErrorToString(error) << " - Details: " << errorDetail << std::endl;
+  } });
+
+  return JNI_TRUE;
 }
 
-static std::shared_ptr<discordpp::Client> client;
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(
+    JNIEnv *env, jobject obj)
+{
+  discordpp::RunCallbacks();
 
-extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_init(
-    JNIEnv* env, jobject obj, jlong applicationId) {
+  return JNI_TRUE;
+}
 
-    // Create Discord client (no event loop here)
-    client = std::make_shared<discordpp::Client>();
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_authorize(
+    JNIEnv *env, jobject obj)
+{
+  // Generate OAuth2 code verifier for authentication
+  auto codeVerifier = client->CreateAuthorizationCodeVerifier();
 
-    // You could call client->run() or similar here if the SDK requires,
-    // but in this minimal example, just create it and return.
-    std::cout << "test";
+  // Set up authentication arguments
+  discordpp::AuthorizationArgs args{};
+  args.SetClientId(APPLICATION_ID);
+  args.SetScopes(discordpp::Client::GetDefaultPresenceScopes());
+  args.SetCodeChallenge(codeVerifier.Challenge());
 
-    return JNI_TRUE;
+  // Begin authentication process
+  client->Authorize(args, [codeVerifier](auto result, auto code, auto redirectUri)
+                    {
+  if (!result.Successful()) {
+    std::cerr << "❌ Authentication Error: " << result.Error() << std::endl;
+    return;
+  } else {
+    std::cout << "✅ Authorization successful! Getting access token...\n";
+
+    // Exchange auth code for access token
+    client->GetToken(APPLICATION_ID, code, codeVerifier.Verifier(), redirectUri,
+      [](discordpp::ClientResult result,
+      std::string accessToken,
+      std::string refreshToken,
+      discordpp::AuthorizationTokenType tokenType,
+      int32_t expiresIn,
+      std::string scope) {
+        std::cout << "🔓 Access token received! Establishing connection...\n";
+        
+        client->UpdateToken(discordpp::AuthorizationTokenType::Bearer,  accessToken, [](discordpp::ClientResult result) {
+        if(result.Successful()) {
+          std::cout << "🔑 Token updated, connecting to Discord...\n";
+          client->Connect();
+        }
+      });
+    });
+  } });
+
+  return JNI_TRUE;
 }
