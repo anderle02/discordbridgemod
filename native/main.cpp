@@ -8,24 +8,41 @@
 #include <csignal>
 #include <jni.h>
 
-// Create a flag to stop the application
 jlong APPLICATION_ID = 0;
-std::atomic<bool> running = true;
+std::string STATUS;
+
 static std::shared_ptr<discordpp::Client> client;
 
-// Signal handler to stop the application
-void signalHandler(int signum)
-{
-  running.store(false);
+std::string jstringToStdString(JNIEnv* env, jstring jStr) {
+    if (!jStr) return "";
+
+    const char* chars = env->GetStringUTFChars(jStr, nullptr);
+    std::string result(chars);
+    env->ReleaseStringUTFChars(jStr, chars);
+
+    return result;
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_init(
-    JNIEnv *env, jobject obj, jlong applicationId)
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_sendMessage(JNIEnv *env, jobject obj, jstring message)
+{
+  uint64_t recipientId = 947173506045591593; // The recipient's Discord ID
+
+  client->SendUserMessage(recipientId, jstringToStdString(env, message), [](auto result, uint64_t messageId)
+                          {
+  if (result.Successful()) {
+    STATUS = "✅ Message sent successfully";
+  } else {
+    STATUS = "❌ Failed to send message: " + result.Error();
+  } });
+
+  return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_init(JNIEnv *env, jobject obj, jlong applicationId)
 {
   APPLICATION_ID = applicationId;
 
-  std::signal(SIGINT, signalHandler);
-  std::cout << "🚀 Initializing Discord SDK with AppID " << APPLICATION_ID << "...\n";
+  STATUS = "🚀 Initializing Discord SDK with AppID " + std::to_string(APPLICATION_ID) + "...";
 
   // Create Discord client (no event loop here)
   client = std::make_shared<discordpp::Client>();
@@ -35,27 +52,24 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 
   client->SetStatusChangedCallback([](discordpp::Client::Status status, discordpp::Client::Error error, int32_t errorDetail)
                                    {
-  std::cout << "🔄 Status changed: " << discordpp::Client::StatusToString(status) << std::endl;
+  STATUS = "🔄 Status changed: " + discordpp::Client::StatusToString(status);
 
   if (status == discordpp::Client::Status::Ready) {
-    std::cout << "✅ Client is ready! You can now call SDK functions.\n";
+    STATUS = "✅ Client is ready! You can now call SDK functions.";
   } else if (error != discordpp::Client::Error::None) {
-    std::cerr << "❌ Connection Error: " << discordpp::Client::ErrorToString(error) << " - Details: " << errorDetail << std::endl;
+    STATUS = "❌ Connection Error: " + discordpp::Client::ErrorToString(error) + " - Details: " + std::to_string(errorDetail);
   } });
 
   return JNI_TRUE;
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(
-    JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jstring JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(JNIEnv *env, jobject obj)
 {
   discordpp::RunCallbacks();
-
-  return JNI_TRUE;
+  return env->NewStringUTF(STATUS.c_str());
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_authorize(
-    JNIEnv *env, jobject obj)
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_authorize(JNIEnv *env, jobject obj)
 {
   // Generate OAuth2 code verifier for authentication
   auto codeVerifier = client->CreateAuthorizationCodeVerifier();
@@ -63,17 +77,17 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
   // Set up authentication arguments
   discordpp::AuthorizationArgs args{};
   args.SetClientId(APPLICATION_ID);
-  args.SetScopes(discordpp::Client::GetDefaultPresenceScopes());
+  args.SetScopes(discordpp::Client::GetDefaultCommunicationScopes());
   args.SetCodeChallenge(codeVerifier.Challenge());
 
   // Begin authentication process
   client->Authorize(args, [codeVerifier](auto result, auto code, auto redirectUri)
                     {
   if (!result.Successful()) {
-    std::cerr << "❌ Authentication Error: " << result.Error() << std::endl;
+    STATUS = "❌ Authentication Error: " + result.Error();
     return;
   } else {
-    std::cout << "✅ Authorization successful! Getting access token...\n";
+    STATUS = "✅ Authorization successful! Getting access token...";
 
     // Exchange auth code for access token
     client->GetToken(APPLICATION_ID, code, codeVerifier.Verifier(), redirectUri,
@@ -83,11 +97,11 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
       discordpp::AuthorizationTokenType tokenType,
       int32_t expiresIn,
       std::string scope) {
-        std::cout << "🔓 Access token received! Establishing connection...\n";
+        STATUS = "🔓 Access token received! Establishing connection...";
         
         client->UpdateToken(discordpp::AuthorizationTokenType::Bearer,  accessToken, [](discordpp::ClientResult result) {
         if(result.Successful()) {
-          std::cout << "🔑 Token updated, connecting to Discord...\n";
+          STATUS = "🔑 Token updated, connecting to Discord...";
           client->Connect();
         }
       });
