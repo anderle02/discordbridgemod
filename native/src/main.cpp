@@ -1,12 +1,13 @@
 #define DISCORDPP_IMPLEMENTATION
 #include "discordpp.h"
+#include <chrono>
 #include <iostream>
 #include <jni.h>
 #include <string>
 
 static std::shared_ptr<discordpp::Client> client; // Discord Client.
-static jlong APPLICATION_ID = 0; // Application ID.
-static jboolean READY = false; // Client State.
+static jlong APPLICATION_ID = 0;				  // Application ID.
+static jboolean READY = false;					  // Client State.
 
 /* Convert jstring to std::string. */
 static std::string jstringToStdString(JNIEnv *env, jstring jStr);
@@ -36,7 +37,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 /* Make discord run all its tasks. */
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(JNIEnv *env, jobject obj) {
 	discordpp::RunCallbacks();
-    // TODO: Report status changes here
+	// TODO: Report status changes here
 	return JNI_TRUE;
 }
 
@@ -60,14 +61,42 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 			[gCallback](discordpp::ClientResult res2, std::string accessToken, std::string refreshToken, discordpp::AuthorizationTokenType tokenType, int32_t expiresIn, std::string scope) {
 				if (!res2.Successful()) return runJNICallback(gCallback, false, res2.Error());
 
-				client->UpdateToken(discordpp::AuthorizationTokenType::Bearer, accessToken, [gCallback](discordpp::ClientResult res3) {
-					if (!res3.Successful()) return runJNICallback(gCallback, false, res3.Error());
+				auto expiresAt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + expiresIn;
+				std::string credentials = "{\"accessToken\":\"" + accessToken + "\",\"refreshToken\":\"" + refreshToken + "\",\"expiresAt\":" + std::to_string(expiresAt) + "}";
 
-					runJNICallback(gCallback, true, "🔑 Token updated, connecting to Discord...");
-					client->Connect();
-				});
+				runJNICallback(gCallback, true, credentials);
 			});
 	});
+	return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_refreshToken(JNIEnv *env, jobject, jstring refreshToken, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+
+	client->RefreshToken(
+		APPLICATION_ID, jstringToStdString(env, refreshToken),
+		[gCallback](discordpp::ClientResult res1, std::string accessToken, std::string refreshToken, discordpp::AuthorizationTokenType tokenType, int32_t expiresIn, std::string scope) {
+			if (!res1.Successful()) return runJNICallback(gCallback, false, res1.Error());
+
+			auto expiresAt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + expiresIn;
+			std::string credentials = "{\"accessToken\":\"" + accessToken + "\",\"refreshToken\":\"" + refreshToken + "\",\"expiresAt\":" + std::to_string(expiresAt) + "}";
+
+			runJNICallback(gCallback, true, credentials);
+		});
+
+	return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_login(JNIEnv *env, jobject, jstring accessToken, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+
+	client->UpdateToken(discordpp::AuthorizationTokenType::Bearer, jstringToStdString(env, accessToken), [gCallback](discordpp::ClientResult result) {
+		if (!result.Successful()) return runJNICallback(gCallback, false, result.Error());
+
+		runJNICallback(gCallback, true, "");
+		client->Connect();
+	});
+
 	return JNI_TRUE;
 }
 

@@ -1,9 +1,7 @@
 package dev.anderle.discordbridge;
 
-import dev.anderle.discordbridge.commands.SetupCommand;
 import net.fabricmc.api.ModInitializer;
 
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,8 +14,7 @@ public class DiscordBridge implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> new SetupCommand(dispatcher));
-
 		LOGGER.info("DiscordBridge Initialized!");
+		discordClient.startLoginFlow();
 	}
 }

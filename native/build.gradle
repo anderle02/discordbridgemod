@@ -10,7 +10,7 @@ def libName          = os.getSharedLibraryName('discord_bridge')      // lib…s
 tasks.register('configureNative', Exec) {
     workingDir  = cmakeBuildDir
     commandLine 'cmake', '-S', projectDir, '-B', cmakeBuildDir, "-DCMAKE_BUILD_TYPE=${buildType}"
-    inputs.dir projectDir
+    inputs.dir  "${projectDir}/src"
     outputs.dir cmakeBuildDir
 }
 
@@ -18,6 +18,6 @@ tasks.register('buildNative', Exec) {
     dependsOn   'configureNative'
     workingDir  = cmakeBuildDir
     commandLine 'cmake', '--build', '.', '--config', buildType, '--parallel'
-    inputs.dir  cmakeBuildDir
-    outputs.file file("${cmakeBuildDir}/${libName}")
+    inputs.dir  "${projectDir}/src"
+    outputs.file file("${cmakeBuildDir}/Release/${libName}")
 }

@@ -4,7 +4,7 @@ project(discord_bridge)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-add_library(discord_bridge SHARED main.cpp)
+add_library(discord_bridge SHARED src/main.cpp)
 
 # Define some handy Social SDK variables
 set(DISCORD_SDK_ROOT "${CMAKE_SOURCE_DIR}/../discord_social_sdk")

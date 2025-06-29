@@ -41,3 +41,4 @@ replay_*.log
 
 # discord social sdk files
 discord_social_sdk/*
+native/.clang-format
