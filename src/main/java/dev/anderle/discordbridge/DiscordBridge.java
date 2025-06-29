@@ -4,7 +4,6 @@ import dev.anderle.discordbridge.commands.SetupCommand;
 import net.fabricmc.api.ModInitializer;
 
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,13 +17,6 @@ public class DiscordBridge implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> new SetupCommand(dispatcher));
-
-		ClientSendMessageEvents.CHAT.register(message -> {
-			if (!message.startsWith("/")) { // Ignore commands
-				System.out.println("You sent: " + message);
-				discordClient.sendMessage(message);
-			}
-		});
 
 		LOGGER.info("DiscordBridge Initialized!");
 	}
