@@ -27,10 +27,21 @@ public final class DiscordSDK {
         });
     }
 
+    public void updateRichPresence() {
+        updateRichPresence("details", "state", new NativeCallback() {
+            public void onSuccess(String data) {
+                DiscordBridge.LOGGER.info("Successfully updated Discord RPC.");
+            }
+            public void onError(String message) {
+                DiscordBridge.LOGGER.error("Failed to set Discord RPC: {}", message);
+            }
+        });
+    }
+
     /** Opens discord for authorization or refreshes the access token if needed. Then logs into Discord. */
     public void startLoginFlow() {
         if(Config.instance().getString("accessToken").isEmpty()) {
-            authorize(new AuthCallback() {
+            authorize(new NativeCallback() {
                 public void onSuccess(String data) {
                     storeCredentials(JsonParser.parseString(data).getAsJsonObject());
                     DiscordBridge.LOGGER.info("Successfully authorized with Discord. Logging in...");
@@ -41,7 +52,7 @@ public final class DiscordSDK {
                 }
             });
         } else if(isTokenExpired(Long.parseLong(Config.instance().getString("expiresAt")))) {
-            refreshToken(Config.instance().getString("refreshToken"), new AuthCallback() {
+            refreshToken(Config.instance().getString("refreshToken"), new NativeCallback() {
                 public void onSuccess(String data) {
                     storeCredentials(JsonParser.parseString(data).getAsJsonObject());
                     DiscordBridge.LOGGER.info("Successfully refreshed Discord access token. Logging in...");
@@ -57,9 +68,10 @@ public final class DiscordSDK {
     }
 
     private void login() {
-        login(Config.instance().getString("accessToken"), new AuthCallback() {
+        login(Config.instance().getString("accessToken"), new NativeCallback() {
             public void onSuccess(String data) {
                 DiscordBridge.LOGGER.info("Successfully logged in with Discord.");
+                updateRichPresence();
             }
             public void onError(String message) {
                 DiscordBridge.LOGGER.error("Failed to log in with Discord: {}", message);
@@ -79,12 +91,13 @@ public final class DiscordSDK {
 
     private native boolean init(long applicationId);
     private native boolean runCallbacks();
-    private native boolean authorize(AuthCallback callback);
-    private native boolean refreshToken(String refreshToken, AuthCallback callback);
-    private native boolean login(String accessToken, AuthCallback callback);
+    private native boolean authorize(NativeCallback callback);
+    private native boolean refreshToken(String refreshToken, NativeCallback callback);
+    private native boolean login(String accessToken, NativeCallback callback);
+    private native boolean updateRichPresence(String details, String state, NativeCallback callback);
 
     @SuppressWarnings("unused")
-    public interface AuthCallback {
+    public interface NativeCallback {
         void onSuccess(String data);
         void onError(String message);
     }

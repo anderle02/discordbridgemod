@@ -4,6 +4,7 @@
 #include <iostream>
 #include <jni.h>
 #include <string>
+#include <thread>
 
 static std::shared_ptr<discordpp::Client> client; // Discord Client.
 static jlong APPLICATION_ID = 0;				  // Application ID.
@@ -38,6 +39,25 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(JNIEnv *env, jobject obj) {
 	discordpp::RunCallbacks();
 	// TODO: Report status changes here
+	return JNI_TRUE;
+}
+
+/* Update the user's rich presence. */
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_updateRichPresence(JNIEnv *env, jobject, jstring details, jstring state, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+
+	discordpp::Activity activity;
+	activity.SetType(discordpp::ActivityTypes::Playing);
+	activity.SetDetails(jstringToStdString(env, details));
+	activity.SetState(jstringToStdString(env, state));
+
+	client->UpdateRichPresence(activity, [gCallback](discordpp::ClientResult result) {
+		if (result.Successful())
+			runJNICallback(gCallback, true, "");
+		else
+			runJNICallback(gCallback, false, result.Error());
+	});
+
 	return JNI_TRUE;
 }
 
@@ -93,8 +113,19 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 	client->UpdateToken(discordpp::AuthorizationTokenType::Bearer, jstringToStdString(env, accessToken), [gCallback](discordpp::ClientResult result) {
 		if (!result.Successful()) return runJNICallback(gCallback, false, result.Error());
 
-		runJNICallback(gCallback, true, "");
 		client->Connect();
+
+        auto start = std::chrono::steady_clock::now();
+
+		std::thread([gCallback, start]() {
+			while (!READY) { // Wait until the client is ready.
+				if (std::chrono::steady_clock::now() - start > std::chrono::seconds(5)) {
+					return runJNICallback(gCallback, false, "Timeout waiting for client ready. Check https://discordstatus.com/ for issues.");
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
+			runJNICallback(gCallback, true, "");
+		}).detach();
 	});
 
 	return JNI_TRUE;
