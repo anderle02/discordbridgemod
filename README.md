@@ -32,5 +32,3 @@ Add the following to your `.idea/runConfigurations/Minecraft_Client.xml` file.
 Run `Minecraft Client` to start coding.
 
 To edit the native code I'd recommend VS Code or some other IDE, IntelliJ doesn't really support C/C++.
-### License
-(coming soon)
