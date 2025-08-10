@@ -71,7 +71,7 @@ public final class DiscordSDK {
         login(Config.instance().getString("accessToken"), new NativeCallback() {
             public void onSuccess(String data) {
                 DiscordBridge.LOGGER.info("Successfully logged in with Discord.");
-                updateRichPresence();
+                //updateRichPresence();
             }
             public void onError(String message) {
                 DiscordBridge.LOGGER.error("Failed to log in with Discord: {}", message);
@@ -95,6 +95,8 @@ public final class DiscordSDK {
     private native boolean refreshToken(String refreshToken, NativeCallback callback);
     private native boolean login(String accessToken, NativeCallback callback);
     private native boolean updateRichPresence(String details, String state, NativeCallback callback);
+    public native boolean getUserGuilds(NativeCallback callback);
+    public native boolean getGuildChannels(long guildId, NativeCallback callback);
 
     @SuppressWarnings("unused")
     public interface NativeCallback {

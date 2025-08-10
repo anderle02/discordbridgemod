@@ -1,5 +1,6 @@
 #define DISCORDPP_IMPLEMENTATION
 #include "discordpp.h"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <jni.h>
@@ -14,6 +15,7 @@ static jboolean READY = false;					  // Client State.
 static std::string jstringToStdString(JNIEnv *env, jstring jStr);
 /* Call the callback and then delete its reference. */
 static void runJNICallback(jobject gCallback, bool success, const std::string &msg);
+static std::string removeSpecialChars(const std::string &input);
 
 /* Save the jvm as global reference on load. */
 static JavaVM *g_jvm = nullptr;
@@ -32,6 +34,9 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 
 	client->SetStatusChangedCallback([](discordpp::Client::Status status, discordpp::Client::Error error, int32_t errorDetail) { READY = status == discordpp::Client::Status::Ready; });
 
+	std::string localappdata = std::getenv("LOCALAPPDATA");
+	client->RegisterLaunchCommand(APPLICATION_ID, "\"" + localappdata + "\\Programs\\PrismLauncher\\prismlauncher.exe\" --launch \"Skyblock Foraging\" --server \"mc.hypixel.net\"");
+
 	return JNI_TRUE;
 }
 
@@ -39,6 +44,53 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_runCallbacks(JNIEnv *env, jobject obj) {
 	discordpp::RunCallbacks();
 	// TODO: Report status changes here
+	return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_createOrJoinLobby(JNIEnv *env, jobject, jstring secret, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+	client->CreateOrJoinLobby(jstringToStdString(env, secret), [gCallback](discordpp::ClientResult result, uint64_t lobbyId) {
+		if (!result.Successful()) return runJNICallback(gCallback, false, result.Error());
+
+		runJNICallback(gCallback, true, std::to_string(lobbyId));
+	});
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_getUserGuilds(JNIEnv *env, jobject, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+
+	client->GetUserGuilds([gCallback](discordpp::ClientResult result, std::vector<discordpp::GuildMinimal> guilds) {
+		if (!result.Successful()) return runJNICallback(gCallback, false, result.Error());
+
+		std::string data = "[";
+		for (const discordpp::GuildMinimal guild : guilds) {
+			data.append("{\"id\":" + std::to_string(guild.Id()) + ",\"name\":\"" + guild.Name() + "\"},");
+		}
+		data.pop_back();
+		data.append("]");
+
+		runJNICallback(gCallback, true, data);
+	});
+
+	return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_getGuildChannels(JNIEnv *env, jobject, jlong guildId, jobject callback) {
+	jobject gCallback = env->NewGlobalRef(callback);
+
+	client->GetGuildChannels(guildId, [gCallback](discordpp::ClientResult result, std::vector<discordpp::GuildChannel> guildChannels) {
+		if (!result.Successful()) return runJNICallback(gCallback, false, result.Error());
+
+		std::string data = "[";
+		for (const discordpp::GuildChannel channel : guildChannels) {
+			data.append("{\"id\":" + std::to_string(channel.Id()) + ",\"name\":\"" + channel.Name() + "\",\"isLinkable\":" + std::to_string(channel.IsLinkable()) + "},");
+		}
+		data.pop_back();
+		data.append("]");
+
+		runJNICallback(gCallback, true, data);
+	});
+
 	return JNI_TRUE;
 }
 
@@ -50,6 +102,25 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 	activity.SetType(discordpp::ActivityTypes::Playing);
 	activity.SetDetails(jstringToStdString(env, details));
 	activity.SetState(jstringToStdString(env, state));
+
+	// Set the party information
+	// Create discordpp::ActivityParty
+	discordpp::ActivityParty party;
+	party.SetId("party1234");
+	// current party size
+	party.SetCurrentSize(1);
+	// max party size
+	party.SetMaxSize(5);
+	activity.SetParty(party);
+
+	// Create ActivitySecrets
+	discordpp::ActivitySecrets secrets;
+	secrets.SetJoin("joinsecret1234");
+	activity.SetSecrets(secrets);
+
+	// Set supported platforms that can join the game
+	// See discordpp::ActivityGamePlatforms for available platforms
+	activity.SetSupportedPlatforms(discordpp::ActivityGamePlatforms::Desktop);
 
 	client->UpdateRichPresence(activity, [gCallback](discordpp::ClientResult result) {
 		if (result.Successful())
@@ -115,7 +186,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_anderle_discordbridge_DiscordSDK_
 
 		client->Connect();
 
-        auto start = std::chrono::steady_clock::now();
+		auto start = std::chrono::steady_clock::now();
 
 		std::thread([gCallback, start]() {
 			while (!READY) { // Wait until the client is ready.
@@ -138,7 +209,7 @@ static void runJNICallback(jobject gCallback, bool success, const std::string &m
 
 	jclass cls = env->GetObjectClass(gCallback);
 	jmethodID mid = env->GetMethodID(cls, success ? "onSuccess" : "onError", "(Ljava/lang/String;)V");
-	jstring jMsg = env->NewStringUTF(msg.c_str());
+	jstring jMsg = env->NewStringUTF(removeSpecialChars(msg).c_str());
 
 	env->CallVoidMethod(gCallback, mid, jMsg);
 	env->DeleteLocalRef(jMsg);
@@ -155,4 +226,16 @@ static std::string jstringToStdString(JNIEnv *env, jstring jStr) {
 	env->ReleaseStringUTFChars(jStr, chars);
 
 	return result;
+}
+
+static std::string removeSpecialChars(const std::string &input) {
+	std::string output;
+	for (unsigned char c : input) {
+		// Keep only printable ASCII (space 0x20 to ~ 0x7E)
+		if (c >= 0x20 && c <= 0x7E) {
+			output += c;
+		}
+		// else skip the character
+	}
+	return output;
 }
