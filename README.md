@@ -1,5 +1,5 @@
 # Discord Bridge Mod
-This Minecraft Fabric 1.12.5 mod connects Minecraft with your Discord account,
+This Minecraft Fabric 1.21.5 mod connects Minecraft with your Discord account,
 using [Discord's Social SDK](https://discord.com/developers/docs/discord-social-sdk/overview).
 
 ## Features
